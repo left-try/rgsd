@@ -105,7 +105,11 @@ function routeContextSliceCommand({ args, cwd, raw, error, _contextSlice }: Rout
   if (budgetTokensIdx !== -1) {
     const rawBudgetTokens = args[budgetTokensIdx + 1];
     const parsed = rawBudgetTokens === undefined ? NaN : parseInt(rawBudgetTokens, 10);
-    if (Number.isNaN(parsed)) {
+    // Reject negative values too (WR-03) — a negative budget behaves like
+    // budget 0 (everything dropped) inside the engine rather than crashing,
+    // so it must be rejected here as a usage error rather than silently
+    // accepted, same as the existing NaN guard for non-numeric input.
+    if (Number.isNaN(parsed) || parsed < 0) {
       error(USAGE, ERROR_REASON.USAGE);
       return;
     }
@@ -117,7 +121,7 @@ function routeContextSliceCommand({ args, cwd, raw, error, _contextSlice }: Rout
   if (contextLinesIdx !== -1) {
     const rawContextLines = args[contextLinesIdx + 1];
     const parsed = rawContextLines === undefined ? NaN : parseInt(rawContextLines, 10);
-    if (Number.isNaN(parsed)) {
+    if (Number.isNaN(parsed) || parsed < 0) {
       error(USAGE, ERROR_REASON.USAGE);
       return;
     }
