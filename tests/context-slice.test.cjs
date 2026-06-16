@@ -203,6 +203,35 @@ test('CR-01: a parenthesized non-arrow assignment is not misclassified as a func
   assert.ok(texts.some((t) => t.includes('handler')), 'genuine arrow-function assignment must still match');
 });
 
+test('WR-02: a non-*-aligned continuation line inside an open block comment is not captured as a signature', () => {
+  const lines = [
+    '/**',
+    ' * Example usage:',
+    'function exampleInComment(a, b) {',
+    ' */',
+    'function actuallyReal() {',
+    '}',
+  ];
+  const skeleton = extractSkeleton(lines);
+  const texts = skeleton.map((e) => e.text);
+  assert.ok(!texts.some((t) => t.includes('exampleInComment')),
+    'a line inside an open block comment must not be captured, even if unaligned');
+  assert.ok(texts.some((t) => t.includes('actuallyReal')),
+    'a real signature line after the block comment closes must still be captured');
+});
+
+test('WR-02: a single-line /* ... */ comment is still excluded', () => {
+  const lines = [
+    '/* function notReal() {} */',
+    'function actuallyReal() {',
+    '}',
+  ];
+  const skeleton = extractSkeleton(lines);
+  const texts = skeleton.map((e) => e.text);
+  assert.ok(!texts.some((t) => t.includes('notReal')));
+  assert.ok(texts.some((t) => t.includes('actuallyReal')));
+});
+
 test('above-threshold file with no patterns returns skeleton-only with a note', () => {
   const dir = makeTempDir();
   try {

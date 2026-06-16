@@ -124,10 +124,25 @@ function isCommentOnlyLine(trimmed: string): boolean {
  */
 function extractSkeleton(lines: string[]): SkeletonEntry[] {
   const results: SkeletonEntry[] = [];
+  // Track whether we are currently inside an open `/* ... */` block so a
+  // continuation line that isn't `*`-aligned (pasted example code, ASCII
+  // banners, commented-out code) is never misclassified as a real
+  // signature line (WR-02).
+  let inBlockComment = false;
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
     const trimmed = raw.trim();
     if (trimmed.length === 0) continue;
+
+    if (inBlockComment) {
+      if (trimmed.includes('*/')) inBlockComment = false;
+      continue;
+    }
+    if (trimmed.startsWith('/*') && !trimmed.includes('*/')) {
+      // Opens a block comment that is NOT also closed on this same line.
+      inBlockComment = true;
+      continue;
+    }
     if (isCommentOnlyLine(trimmed)) continue;
 
     let isSignature = SKELETON_PATTERNS.some((re) => re.test(raw));
