@@ -211,7 +211,8 @@ For each file:
      (a) treat `skeleton` entries as the structural map of the file (function/class/method signatures with line numbers) for citing in findings;
      (b) treat each `windows[].text` block as the actual reviewable body content for that region, citing `windows[].startLine`-`windows[].endLine` as the line range in any finding;
      (c) for any skeleton entry whose line number falls OUTSIDE every kept window's `[startLine, endLine]` range, and whose signature text matches a risk-shaped name (contains any of: `auth`, `valid`, `sanitiz`, `escape`, `permission`, `token`, `password`, `crypt`, `exec`, `eval`, `query`, `sql`, `parse`, `deserialize`) — Read that specific region with `offset`/`limit` set to a window of `max(1, line-20)` to `line+20` before concluding it is clean;
-     (d) if `droppedRegions` is non-empty for this file, record the file path and dropped line ranges in a running COVERAGE_GAPS note for use in `write_review`.
+     (d) if `droppedRegions` is non-empty for this file, record the file path and dropped line ranges in a running COVERAGE_GAPS note for use in `write_review`;
+     (e) `droppedRegions.length === 0` does NOT mean the file was fully covered — `droppedRegions` only reports windows that matched a `--pattern` and were then trimmed by budget; it never reports body lines that never matched any pattern at all (including the entire body when `windows` is empty). Therefore, whenever this file's response has `sliced: true`, ALSO record it in COVERAGE_GAPS as partial coverage — labeled `"partial — skeleton + N pattern-matched windows only"` (using the actual count of kept `windows`) — UNLESS every skeleton-bounded region of the file is provably covered by a kept window or was individually re-Read under rule (c). When `windows` is empty, record the dropped range as the entire file body (`"1-{lineCount}, skeleton-only"`). Never rely on `droppedRegions.length > 0` alone to decide whether disclosure is needed.
 2. Apply language-specific checks (from `<depth_levels>` standard section)
 3. Check for common patterns:
    - Functions with >50 lines (code smell)
@@ -286,9 +287,9 @@ findings:
   info: N
   total: N
 status: clean | issues_found
-coverage_gaps:  # optional — only present when one or more files had non-empty droppedRegions from context-slice
+coverage_gaps:  # optional — present when one or more files were recorded in COVERAGE_GAPS per review_by_depth rules (d)/(e): non-empty droppedRegions, OR sliced:true with unmatched/unread skeleton regions (partial coverage), OR windows empty (skeleton-only). Omit this key entirely (do not emit an empty list) when no file was recorded in COVERAGE_GAPS — omission means "no coverage gaps to report," NOT "field not applicable."
   - file: path/to/file.ext
-    dropped_ranges: ["120-160", "300-340"]
+    dropped_ranges: ["120-160", "300-340"]  # for budget-trimmed droppedRegions; use ["1-{lineCount}, skeleton-only"] when windows was empty, or a "partial — skeleton + N pattern-matched windows only" label when coverage is reduced but nothing was actively dropped under budget
     dropped_lines_estimate: 81
 ---
 ```
@@ -319,7 +320,7 @@ The `files_reviewed_list` field is REQUIRED — it preserves the exact file scop
 
 {If status=clean: "All reviewed files meet quality standards. No issues found."}
 
-{If COVERAGE_GAPS is non-empty — append this sentence regardless of status, including status=clean: "Reduced coverage on {N} file(s) due to context-slice budget trimming — see coverage_gaps in frontmatter for exact dropped line ranges."}
+{If COVERAGE_GAPS is non-empty — append this sentence regardless of status, including status=clean: "Reduced coverage on {N} file(s) — context-slice returned partial coverage (budget-trimmed regions and/or unmatched skeleton-only body) for these files — see coverage_gaps in frontmatter for exact dropped/unread line ranges."}
 
 {If issues_found, include sections below}
 
