@@ -134,6 +134,30 @@ describe('context-slice router: precise unit tests (recording mock)', () => {
     assert.deepStrictEqual(calls[0].args[2].patterns, ['X', 'Y']);
   });
 
+  test('WR-01: --pattern --budget-tokens 500 (flag-shaped pattern value) → error(usage); sliceFileGated NOT called', () => {
+    const { calls, mock } = makeContextSliceMock();
+    const errFn = makeErrorRecorder();
+    routeContextSliceCommand({
+      args: ['context-slice', 'slice', 'foo.ts', '--pattern', '--budget-tokens', '500'],
+      cwd: CWD, raw: RAW, error: errFn, _contextSlice: mock,
+    });
+    assert.strictEqual(errFn.calls.length, 1, 'error must be called once');
+    assert.strictEqual(errFn.calls[0].reason, 'usage');
+    assert.strictEqual(calls.length, 0, 'sliceFileGated must NOT be called');
+  });
+
+  test('WR-01: trailing --pattern with no value → error(usage); sliceFileGated NOT called', () => {
+    const { calls, mock } = makeContextSliceMock();
+    const errFn = makeErrorRecorder();
+    routeContextSliceCommand({
+      args: ['context-slice', 'slice', 'foo.ts', '--pattern'],
+      cwd: CWD, raw: RAW, error: errFn, _contextSlice: mock,
+    });
+    assert.strictEqual(errFn.calls.length, 1, 'error must be called once');
+    assert.strictEqual(errFn.calls[0].reason, 'usage');
+    assert.strictEqual(calls.length, 0, 'sliceFileGated must NOT be called');
+  });
+
   test('malformed --budget-tokens value → error(usage); sliceFileGated NOT called', () => {
     const { calls, mock } = makeContextSliceMock();
     const errFn = makeErrorRecorder();

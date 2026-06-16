@@ -128,9 +128,15 @@ function routeContextSliceCommand({ args, cwd, raw, error, _contextSlice }: Rout
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--pattern') {
       const value = args[i + 1];
-      if (value !== undefined) {
-        patterns.push(value);
+      // A missing or flag-shaped value (e.g. `--pattern --budget-tokens`)
+      // means the caller omitted the pattern by mistake — reject with a
+      // usage error instead of silently treating the next flag's name as
+      // a literal pattern (WR-01).
+      if (value === undefined || value.startsWith('--')) {
+        error(USAGE, ERROR_REASON.USAGE);
+        return;
       }
+      patterns.push(value);
     }
   }
 
