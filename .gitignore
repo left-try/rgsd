@@ -187,6 +187,7 @@ build/
 /gsd-core/bin/lib/roadmap.cjs
 /gsd-core/bin/lib/audit.cjs
 /gsd-core/bin/lib/context-slice.cjs
+/gsd-core/bin/lib/context-slice-command-router.cjs
 __pycache__/
 *.pyc
 .venv/

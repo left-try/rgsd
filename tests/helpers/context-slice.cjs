@@ -93,8 +93,22 @@ function writeAboveThresholdFile(dir) {
   return filePath;
 }
 
+/**
+ * Enable the context-slice capability in a temp project's .planning/config.json.
+ * Mirrors enableGraphify (tests/helpers/graphify.cjs).
+ */
+function enableContextSlice(planningDir) {
+  const configPath = path.join(planningDir, 'config.json');
+  const config = fs.existsSync(configPath)
+    ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    : {};
+  config['context-slice'] = { enabled: true };
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+}
+
 module.exports = {
   writeBelowThresholdFile,
   writeAboveThresholdFile,
   SAMPLE_SKELETON_LINES,
+  enableContextSlice,
 };

@@ -221,9 +221,9 @@ function applyContextBudget(windows: RankedWindow[], budgetTokens: number): Budg
 // ─── sliceFile ───────────────────────────────────────────────────────────────
 
 interface SliceOptions {
-  budgetTokens?: number;
-  contextLines?: number;
-  patterns?: string[];
+  budgetTokens?: number | null;
+  contextLines?: number | null;
+  patterns?: string[] | null;
 }
 
 interface SliceResult {
@@ -304,10 +304,28 @@ function sliceFile(filePath: string, options: SliceOptions = {}): SliceResult | 
   };
 }
 
+// ─── Gated entry point ───────────────────────────────────────────────────────
+
+/**
+ * Gated entry point for the `context-slice` CLI command (CTXSLICE-06). The
+ * `cwd`-first parameter order mirrors graphify's `graphifyQuery(cwd, ...)` so
+ * a config gate can be added later (see src/graphify.cts disabledResponse
+ * pattern) with zero call-site churn. For now this is a pure pass-through to
+ * sliceFile — the gate itself is added in a later task.
+ */
+function sliceFileGated(
+  cwd: string,
+  filePath: string,
+  options: SliceOptions = {},
+): SliceResult | SliceError {
+  return sliceFile(filePath, options);
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 export = {
   sliceFile,
+  sliceFileGated,
   estimateTokens,
   extractSkeleton,
   rankWindows,
