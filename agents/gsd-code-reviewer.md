@@ -199,7 +199,19 @@ Record findings with severity: secrets/dangerous=Critical, debug=Info, empty cat
 
 **For depth=standard:**
 For each file:
-1. Read full content
+1. **Context-slice pre-filter (run before reading):** Run via the Bash tool:
+   ```bash
+   gsd-tools context-slice <file> --pattern "(password|secret|api[_-]?key|token|credential)" --pattern "(eval\(|exec\(|innerHTML|dangerouslySetInnerHTML|shell_exec|child_process|spawn\(|deserialize)" --pattern "(auth|login|session|permission|authoriz)" --pattern "(catch\s*\(|throw |try\s*\{)"
+   ```
+   These four pattern groups map directly to this agent's own `<review_scope>` categories (Security, Bugs/error-handling). Parse the JSON result and branch on its shape:
+   - `disabled: true` → call Read on the file in full (current behavior, zero change).
+   - `sliced: false` → call Read on the file in full (content is already byte-identical to a plain read; Read remains the canonical way this agent consumes content for line-citation).
+   - `error` → call Read on the file in full as a fail-open fallback — never skip a file silently.
+   - `sliced: true` → do NOT Read the full file. Instead:
+     (a) treat `skeleton` entries as the structural map of the file (function/class/method signatures with line numbers) for citing in findings;
+     (b) treat each `windows[].text` block as the actual reviewable body content for that region, citing `windows[].startLine`-`windows[].endLine` as the line range in any finding;
+     (c) for any skeleton entry whose line number falls OUTSIDE every kept window's `[startLine, endLine]` range, and whose signature text matches a risk-shaped name (contains any of: `auth`, `valid`, `sanitiz`, `escape`, `permission`, `token`, `password`, `crypt`, `exec`, `eval`, `query`, `sql`, `parse`, `deserialize`) — Read that specific region with `offset`/`limit` set to a window of `max(1, line-20)` to `line+20` before concluding it is clean;
+     (d) if `droppedRegions` is non-empty for this file, record the file path and dropped line ranges in a running COVERAGE_GAPS note for use in `write_review`.
 2. Apply language-specific checks (from `<depth_levels>` standard section)
 3. Check for common patterns:
    - Functions with >50 lines (code smell)
@@ -211,7 +223,7 @@ For each file:
 Record findings with file path, line number, description
 
 **For depth=deep:**
-All of standard, plus:
+All of standard (including the context-slice pre-filter step above, applied identically), plus:
 1. **Build import graph:** Parse imports/exports across all reviewed files
 2. **Trace call chains:** For each public function, trace callers across modules
 3. **Check type consistency:** Verify types match at module boundaries (for TS)
@@ -274,6 +286,10 @@ findings:
   info: N
   total: N
 status: clean | issues_found
+coverage_gaps:  # optional — only present when one or more files had non-empty droppedRegions from context-slice
+  - file: path/to/file.ext
+    dropped_ranges: ["120-160", "300-340"]
+    dropped_lines_estimate: 81
 ---
 ```
 
@@ -302,6 +318,8 @@ The `files_reviewed_list` field is REQUIRED — it preserves the exact file scop
 {Brief narrative: what was reviewed, high-level assessment, key concerns if any}
 
 {If status=clean: "All reviewed files meet quality standards. No issues found."}
+
+{If COVERAGE_GAPS is non-empty — append this sentence regardless of status, including status=clean: "Reduced coverage on {N} file(s) due to context-slice budget trimming — see coverage_gaps in frontmatter for exact dropped line ranges."}
 
 {If issues_found, include sections below}
 
