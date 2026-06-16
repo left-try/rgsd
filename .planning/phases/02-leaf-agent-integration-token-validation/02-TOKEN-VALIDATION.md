@@ -73,3 +73,9 @@ This is real, measured, and reproducible (anyone can re-run the same CLI command
 - **Original value (pre-measurement):** `null` (key absent from `.planning/config.json`) — captured to sidecar file `.planning/phases/02-leaf-agent-integration-token-validation/.context-slice-enabled.orig` before any config change, containing the literal value `null`.
 - **Restored value (post-measurement):** `context-slice.enabled` set back to its original absent/null state via `gsd-tools config-set context-slice.enabled` removal-equivalent (explicit reset to the pre-measurement state) — confirmed by re-reading `.planning/config.json` after restoration.
 - **Sidecar cleanup:** `.context-slice-enabled.orig` deleted after restoration was confirmed. Its absence (verifiable via `Test-Path`/`fs.existsSync`) is the checkable proof that the restore-then-cleanup sequence ran.
+
+## Verification
+
+Both plan verification scripts were re-run against this document's final state and the live config after Task 2's edits:
+- Task 1 automated check (`Methodology`/`Target File`/`BEFORE Run` sections non-empty, non-placeholder): `VERIFY_PASS`
+- Task 2 automated check (`AFTER Run`/`Comparison`/`Config Restoration` sections non-empty, non-placeholder, plus live confirmation that `context-slice.enabled` reads back as `null`/absent and the `.context-slice-enabled.orig` sidecar file does not exist on disk): `VERIFY_PASS`
