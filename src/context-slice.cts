@@ -16,6 +16,28 @@
 
 import fs from 'node:fs';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import capabilityStateMod = require('./capability-state.cjs');
+const { isCapabilityActive } = capabilityStateMod;
+
+// ─── Config Gate ─────────────────────────────────────────────────────────────
+
+interface DisabledResponse {
+  disabled: true;
+  message: string;
+}
+
+/**
+ * Return the standard disabled response object. Mirrors graphify's
+ * disabledResponse() shape (src/graphify.cts).
+ */
+function disabledResponse(): DisabledResponse {
+  return {
+    disabled: true,
+    message: 'context-slice is not enabled. Enable with: gsd-tools config-set context-slice.enabled true',
+  };
+}
+
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
 interface ContextSliceDefaults {
@@ -308,16 +330,17 @@ function sliceFile(filePath: string, options: SliceOptions = {}): SliceResult | 
 
 /**
  * Gated entry point for the `context-slice` CLI command (CTXSLICE-06). The
- * `cwd`-first parameter order mirrors graphify's `graphifyQuery(cwd, ...)` so
- * a config gate can be added later (see src/graphify.cts disabledResponse
- * pattern) with zero call-site churn. For now this is a pure pass-through to
- * sliceFile — the gate itself is added in a later task.
+ * `cwd`-first parameter order mirrors graphify's `graphifyQuery(cwd, ...)`.
+ * The capability gate is the FIRST statement so the disabled response
+ * short-circuits before any fs read — mirrors the graphifyQuery gate
+ * ordering (src/graphify.cts).
  */
 function sliceFileGated(
   cwd: string,
   filePath: string,
   options: SliceOptions = {},
-): SliceResult | SliceError {
+): SliceResult | SliceError | DisabledResponse {
+  if (!isCapabilityActive('context-slice', cwd)) return disabledResponse();
   return sliceFile(filePath, options);
 }
 
@@ -326,6 +349,7 @@ function sliceFileGated(
 export = {
   sliceFile,
   sliceFileGated,
+  disabledResponse,
   estimateTokens,
   extractSkeleton,
   rankWindows,
