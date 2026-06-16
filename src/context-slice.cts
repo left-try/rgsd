@@ -73,17 +73,30 @@ interface SkeletonEntry {
   text: string;
 }
 
+// JS/TS control-flow keywords that must never be misclassified as a class
+// method name by CLASS_METHOD_PATTERN below (CR-01) — e.g. `if (...) {`,
+// `for (...) {`, `while (...) {`, `switch (...) {`, `catch (...) {` are
+// indented control-flow blocks, not method signatures.
+const CONTROL_FLOW_KEYWORDS = new Set(['if', 'for', 'while', 'switch', 'catch', 'do', 'else']);
+
+// Class methods (indented inside a class body) — captures the identifier
+// (group 2) so callers can reject control-flow keywords matched by shape
+// alone (CR-01).
+const CLASS_METHOD_PATTERN =
+  /^\s{2,}(public\s+|private\s+|protected\s+|static\s+|async\s+|get\s+|set\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*[:{]/;
+
 const SKELETON_PATTERNS: RegExp[] = [
   // JS/TS function declarations (export/default/async modifiers optional)
   /^\s*(export\s+)?(default\s+)?(async\s+)?function\s+\w+/,
-  // Arrow-function assignments: const/let/var foo = (async) (
-  /^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(/,
+  // Arrow-function assignments: const/let/var foo = (async) (...) => — an
+  // explicit `=>` after the parameter list is required (CR-01) so a plain
+  // parenthesized expression on the right-hand side of an assignment (e.g.
+  // `const x = (a || b);`) is not misclassified as a function definition.
+  /^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\([^)]*\)\s*=>/,
   // Class declarations
   /^\s*(export\s+)?(default\s+)?(abstract\s+)?class\s+\w+/,
   // TS interface / type alias
   /^\s*(export\s+)?(interface|type)\s+\w+/,
-  // Class methods (indented inside a class body)
-  /^\s{2,}(public\s+|private\s+|protected\s+|static\s+|async\s+)*\w+\s*\([^)]*\)\s*[:{]/,
   // Python async def / def
   /^\s*(async\s+)?def\s+\w+/,
   // Python class
@@ -116,7 +129,21 @@ function extractSkeleton(lines: string[]): SkeletonEntry[] {
     const trimmed = raw.trim();
     if (trimmed.length === 0) continue;
     if (isCommentOnlyLine(trimmed)) continue;
-    if (SKELETON_PATTERNS.some((re) => re.test(raw))) {
+
+    let isSignature = SKELETON_PATTERNS.some((re) => re.test(raw));
+
+    if (!isSignature) {
+      // Class methods need an extra check beyond shape alone (CR-01): reject
+      // the match if the captured identifier is a control-flow keyword, so
+      // `if (...) {`, `for (...) {`, `while (...) {`, `switch (...) {`, and
+      // `catch (...) {` are never misclassified as method signatures.
+      const methodMatch = CLASS_METHOD_PATTERN.exec(raw);
+      if (methodMatch && !CONTROL_FLOW_KEYWORDS.has(methodMatch[2])) {
+        isSignature = true;
+      }
+    }
+
+    if (isSignature) {
       results.push({ line: i + 1, text: trimmed });
     }
   }

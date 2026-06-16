@@ -153,6 +153,56 @@ test('comment-only lines never produce a skeleton entry', () => {
   assert.ok(texts.some((t) => t.includes('actuallyReal')));
 });
 
+test('CR-01: indented control-flow blocks (if/for/while/switch/catch) are excluded from the skeleton', () => {
+  const lines = [
+    'class Widget {',
+    '  handleRequest(req) {',
+    '    if (req.ready) {',
+    '      doStuff();',
+    '    }',
+    '    for (let i = 0; i < 10; i++) {',
+    '      doStuff();',
+    '    }',
+    '    while (req.pending) {',
+    '      doStuff();',
+    '    }',
+    '    switch (req.kind) {',
+    '      case "a":',
+    '        break;',
+    '    }',
+    '    try {',
+    '      doStuff();',
+    '    } catch (err) {',
+    '      handleErr(err);',
+    '    }',
+    '  }',
+    '}',
+  ];
+  const skeleton = extractSkeleton(lines);
+  const texts = skeleton.map((e) => e.text);
+  assert.ok(texts.some((t) => t.includes('handleRequest')), 'real method signature must still be captured');
+  assert.ok(!texts.some((t) => t.startsWith('if (')), 'if (...) block must not be captured as a signature');
+  assert.ok(!texts.some((t) => t.startsWith('for (')), 'for (...) block must not be captured as a signature');
+  assert.ok(!texts.some((t) => t.startsWith('while (')), 'while (...) block must not be captured as a signature');
+  assert.ok(!texts.some((t) => t.startsWith('switch (')), 'switch (...) block must not be captured as a signature');
+  assert.ok(!texts.some((t) => t.includes('catch (err)')), 'catch (...) block must not be captured as a signature');
+});
+
+test('CR-01: a parenthesized non-arrow assignment is not misclassified as a function definition', () => {
+  const lines = [
+    "const rawBuilt = (typeof builtAtCommit === 'string' ? builtAtCommit : '').trim();",
+    'const timeoutSec = (graphifyConfig && graphifyConfig.build_timeout) || 300;',
+    'const handler = (req, res) => {',
+    '  return res.end();',
+    '};',
+  ];
+  const skeleton = extractSkeleton(lines);
+  const texts = skeleton.map((e) => e.text);
+  assert.ok(!texts.some((t) => t.includes('rawBuilt')), 'plain parenthesized expression must not match');
+  assert.ok(!texts.some((t) => t.includes('timeoutSec')), 'plain parenthesized expression must not match');
+  assert.ok(texts.some((t) => t.includes('handler')), 'genuine arrow-function assignment must still match');
+});
+
 test('above-threshold file with no patterns returns skeleton-only with a note', () => {
   const dir = makeTempDir();
   try {
