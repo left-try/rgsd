@@ -272,6 +272,16 @@ directory is a high-risk signal. Flag such packages `[SUS]` even if the seam rat
 |------------|-------------|----------------|-----------|
 | [capability] | [tier] | [tier or —] | [why this tier owns it] |
 
+### Context-Slice Coverage Notes
+
+> If Step 2.7 was SKIPPED, state: "Step 2.7: SKIPPED (no in-repo file pre-filtering needed)" here and omit the table below.
+
+| File | droppedRegions | Dropped Ranges |
+|------|-----------------|-----------------|
+| [path/to/file.ext] | [N] | [start-end, start-end] |
+
+State explicitly "None — all inspected in-repo files were fully covered" when no in-repo file inspected via context-slice had any non-empty droppedRegions.
+
 ## Standard Stack
 
 ### Core
@@ -618,6 +628,23 @@ Based on phase description, identify what needs investigating:
 - **Patterns:** Expert structure, design patterns, recommended organization
 - **Pitfalls:** Common beginner mistakes, gotchas, rewrite-causing errors
 - **Don't Hand-Roll:** Existing solutions for deceptively complex problems
+
+## Step 2.7: Large In-Repo File Pre-Filtering
+
+When this phase's research requires inspecting existing in-repo source files (as opposed to external library docs) to understand current architecture/patterns relevant to the phase's requirements:
+
+1. **Derive a `--pattern` list** from the phase's key requirement IDs and their descriptions — extract symbol names already known to be relevant from `phase_requirements`/`ROADMAP.md` phase goal text (e.g. function/class/config-key names explicitly mentioned in requirement descriptions). If the phase goal text names a target subsystem, include the subsystem's primary export name as a pattern.
+2. **For each such in-repo file**, run via the Bash tool: `gsd-tools context-slice <file> --pattern "<term1>" --pattern "<term2>" ...` BEFORE reading it.
+3. **Parse the JSON result** and branch on its shape, consistent with the four-branch logic used by other GSD leaf agents:
+   - `disabled: true` → Read the file in full (current behavior, zero change).
+   - `sliced: false` → Read the file in full (byte-identical to a plain read).
+   - `error` → Read the file in full as a fail-open fallback — never skip a file silently.
+   - `sliced: true` → do NOT Read the full file. Work from `skeleton` + `windows[].text` first. Only Read a specific region with `offset`/`limit` (a window of `max(1, line-20)` to `line+20`) when a skeleton entry matches one of the phase's key requirement terms but its line falls outside every kept window (its body was dropped).
+4. **Track coverage:** for every in-repo file inspected this way where `droppedRegions` was non-empty, record the file path and dropped ranges for the `### Context-Slice Coverage Notes` subsection in `output_format` below.
+
+This step applies ONLY to in-repo source files inspected directly via Read — it never applies to external library docs/web content fetched via the `<tool_strategy>` provider seam.
+
+**Skip condition:** If this phase's research requires no in-repo file inspection (e.g., purely external-library research), output: "Step 2.7: SKIPPED (no in-repo file pre-filtering needed)" and move on.
 
 ## Step 2.5: Runtime State Inventory (rename / refactor / migration phases only)
 
