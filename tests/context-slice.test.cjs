@@ -9,12 +9,14 @@ const path = require('path');
 const {
   sliceFile,
   estimateTokens,
+  extractSkeleton,
   CONTEXT_SLICE_DEFAULTS,
 } = require('../gsd-core/bin/lib/context-slice.cjs');
 
 const {
   writeBelowThresholdFile,
   writeAboveThresholdFile,
+  SAMPLE_SKELETON_LINES,
 } = require('./helpers/context-slice.cjs');
 const { cleanup } = require('./helpers.cjs');
 
@@ -95,4 +97,65 @@ test('sliceFile on a missing path returns an error object and does not throw', (
     result = sliceFile(missing);
   });
   assert.equal(typeof result.error, 'string');
+});
+
+// ─── Task 2: structural skeleton extraction ───────────────────────────────────
+
+test('extractSkeleton captures JS function, TS class + method, and Python def with correct line numbers', () => {
+  const dir = makeTempDir();
+  try {
+    const filePath = writeAboveThresholdFile(dir);
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split(/\r?\n/);
+    const skeleton = extractSkeleton(lines);
+
+    const findEntry = (text) => skeleton.find((e) => e.text === text);
+
+    const jsEntry = findEntry(SAMPLE_SKELETON_LINES.jsFunction);
+    const classEntry = findEntry(SAMPLE_SKELETON_LINES.tsClass);
+    const methodEntry = findEntry(SAMPLE_SKELETON_LINES.tsMethod);
+    const pyEntry = findEntry(SAMPLE_SKELETON_LINES.pyDef);
+
+    assert.ok(jsEntry, 'expected JS function signature in skeleton');
+    assert.ok(classEntry, 'expected TS class signature in skeleton');
+    assert.ok(methodEntry, 'expected TS method signature in skeleton');
+    assert.ok(pyEntry, 'expected Python def signature in skeleton');
+
+    assert.equal(lines[jsEntry.line - 1].trim(), SAMPLE_SKELETON_LINES.jsFunction);
+    assert.equal(lines[classEntry.line - 1].trim(), SAMPLE_SKELETON_LINES.tsClass);
+    assert.equal(lines[methodEntry.line - 1].trim(), SAMPLE_SKELETON_LINES.tsMethod);
+    assert.equal(lines[pyEntry.line - 1].trim(), SAMPLE_SKELETON_LINES.pyDef);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test('comment-only lines never produce a skeleton entry', () => {
+  const lines = [
+    '// function notReal() { still just a comment }',
+    '# def also_not_real(): still just a comment',
+    '   * function alsoNotReal() {}',
+    'function actuallyReal() {',
+    '}',
+  ];
+  const skeleton = extractSkeleton(lines);
+  const texts = skeleton.map((e) => e.text);
+  assert.ok(!texts.some((t) => t.includes('notReal')));
+  assert.ok(!texts.some((t) => t.includes('also_not_real')));
+  assert.ok(!texts.some((t) => t.includes('alsoNotReal')));
+  assert.ok(texts.some((t) => t.includes('actuallyReal')));
+});
+
+test('above-threshold file with no patterns returns skeleton-only with a note', () => {
+  const dir = makeTempDir();
+  try {
+    const filePath = writeAboveThresholdFile(dir);
+    const result = sliceFile(filePath);
+    assert.equal(result.sliced, true);
+    assert.ok(Array.isArray(result.skeleton) && result.skeleton.length > 0);
+    assert.deepEqual(result.windows, []);
+    assert.ok(result.note && result.note.includes('skeleton only'));
+  } finally {
+    cleanup(dir);
+  }
 });
