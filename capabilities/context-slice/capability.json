@@ -1,0 +1,30 @@
+{
+  "id": "context-slice",
+  "role": "feature",
+  "title": "Context slice",
+  "description": "Deterministic large-file pre-filter command: structural skeleton plus pattern-ranked, budget-capped windows for files above a token/line threshold; exposes the `gsd-tools context-slice` CLI subcommand.",
+  "tier": "full",
+  "requires": [],
+  "runtimeCompat": { "supported": ["*"], "unsupported": [] },
+  "skills": [],
+  "agents": [],
+  "activationKey": "context-slice.enabled",
+  "config": {
+    "context-slice.enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable the context-slice large-file pre-filter command."
+    }
+  },
+  "commands": [
+    {
+      "family": "context-slice",
+      "module": "context-slice-command-router.cjs",
+      "router": "routeContextSliceCommand"
+    }
+  ],
+  "hooks": [],
+  "steps": [],
+  "contributions": [],
+  "gates": []
+}

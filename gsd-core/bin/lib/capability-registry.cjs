@@ -481,6 +481,41 @@ const capabilities = {
       "extendedHookEvents": []
     }
   },
+  "context-slice": {
+    "id": "context-slice",
+    "role": "feature",
+    "title": "Context slice",
+    "description": "Deterministic large-file pre-filter command: structural skeleton plus pattern-ranked, budget-capped windows for files above a token/line threshold; exposes the `gsd-tools context-slice` CLI subcommand.",
+    "tier": "full",
+    "requires": [],
+    "runtimeCompat": {
+      "supported": [
+        "*"
+      ],
+      "unsupported": []
+    },
+    "skills": [],
+    "agents": [],
+    "activationKey": "context-slice.enabled",
+    "config": {
+      "context-slice.enabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable the context-slice large-file pre-filter command."
+      }
+    },
+    "commands": [
+      {
+        "family": "context-slice",
+        "module": "context-slice-command-router.cjs",
+        "router": "routeContextSliceCommand"
+      }
+    ],
+    "hooks": [],
+    "steps": [],
+    "contributions": [],
+    "gates": []
+  },
   "copilot": {
     "id": "copilot",
     "role": "runtime",
@@ -2348,6 +2383,7 @@ const configKeys = {
   "workflow.ai_integration_phase": "ai-integration",
   "workflow.code_review": "code-review",
   "workflow.code_review_depth": "code-review",
+  "context-slice.enabled": "context-slice",
   "workflow.drift_threshold": "drift",
   "workflow.drift_action": "drift",
   "workflow.schema_drift_gate": "drift",
@@ -2401,6 +2437,12 @@ const configSchema = {
       "standard",
       "deep"
     ]
+  },
+  "context-slice.enabled": {
+    "owner": "context-slice",
+    "type": "boolean",
+    "default": false,
+    "description": "Enable the context-slice large-file pre-filter command."
   },
   "workflow.drift_threshold": {
     "owner": "drift",
@@ -3492,6 +3534,11 @@ const commandFamilies = {
     "module": "audit-command-router.cjs",
     "router": "routeAuditUat"
   },
+  "context-slice": {
+    "capId": "context-slice",
+    "module": "context-slice-command-router.cjs",
+    "router": "routeContextSliceCommand"
+  },
   "extract-messages": {
     "capId": "profile-pipeline",
     "module": "profile-pipeline-command-router.cjs",
@@ -3634,6 +3681,7 @@ const _requiresGraph = {
   "code-review": [],
   "codebuddy": [],
   "codex": [],
+  "context-slice": [],
   "copilot": [],
   "cursor": [],
   "drift": [],
