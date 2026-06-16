@@ -977,7 +977,15 @@ At investigation decision points, apply structured reasoning:
 - Update Current Focus with "gathering initial evidence"
 - If errors exist, search codebase for error text
 - Identify relevant code area from symptoms
-- Read relevant files COMPLETELY
+- **Context-slice pre-filter (run before reading each relevant file):**
+  1. Derive a `--pattern` list from the bug report and stack trace BEFORE calling context-slice: (a) every identifier token appearing in `Symptoms.errors` (function/method/variable names found via stack-trace-like patterns, e.g. tokens immediately before `(` or after `at `); (b) every identifier token in `Symptoms.actual` that also appears verbatim in the file under investigation (grep-confirm); (c) the literal error message substring itself (regex-escaped) as one pattern. Cap at 6 derived patterns total — prioritize stack-trace identifiers over generic tokens if more than 6 are found.
+  2. Run via the Bash tool: `gsd-tools context-slice <file> --pattern "<token1>" --pattern "<token2>" ...`
+  3. Parse the JSON result and branch on its shape, identically to the four-branch logic used elsewhere in this agent:
+     - `disabled: true` → Read the file in full (current behavior, zero change).
+     - `sliced: false` → Read the file in full (byte-identical to a plain read).
+     - `error` → Read the file in full as a fail-open fallback — never skip a file silently.
+     - `sliced: true` → do NOT Read the full file. Work from `skeleton` + `windows[].text` first (citing `windows[].startLine`-`windows[].endLine` for any region referenced in Evidence). Only Read a specific region with `offset`/`limit` (a window of `max(1, line-20)` to `line+20`) when a skeleton entry's identifier name appears in `Symptoms.errors` or `Symptoms.actual` but its line falls outside every kept window (its body was dropped).
+  4. **Evidence-append rule:** when `droppedRegions` is non-empty for a file inspected this phase, APPEND an Evidence entry: `checked: "{file} via context-slice"`, `found: "sliced with {N} droppedRegions ({ranges}) — investigated only kept windows + risk-matched regions"`, `implication: "if root cause lies in a dropped region, it will not be found by this pass — escalate to full Read if hypothesis testing in dropped territory becomes necessary"`. This keeps the permanent debug-file Evidence record honest about reduced coverage rather than silently presenting it as complete.
 - Run app/tests to observe behavior
 - APPEND to Evidence after each finding
 
@@ -1054,6 +1062,8 @@ Return structured diagnosis:
 
 **Specialist Hint:** {one of: typescript, swift, swift_concurrency, python, rust, go, react, ios, android, general — derived from file extensions and error patterns observed. Use "general" when no specific language/framework applies.}
 ```
+
+**Conditional Coverage Note:** If any Evidence entry recorded in this session has a non-empty `droppedRegions` from context-slice, insert a line directly under **Files Involved** (before **Suggested Fix Direction**): `**Coverage Note:** {summary of which files/ranges were not fully inspected}`. Omit this line entirely when no such Evidence entries exist.
 
 If inconclusive:
 
@@ -1312,6 +1322,8 @@ Orchestrator presents checkpoint to user, gets response, spawns fresh continuati
 **Specialist Hint:** {one of: typescript, swift, swift_concurrency, python, rust, go, react, ios, android, general — derived from file extensions and error patterns observed. Use "general" when no specific language/framework applies.}
 ```
 
+**Conditional Coverage Note:** If any Evidence entry recorded in this session has a non-empty `droppedRegions` from context-slice, insert a line directly under **Files Involved** (before **Suggested Fix Direction**): `**Coverage Note:** {summary of which files/ranges were not fully inspected}`. Omit this line entirely when no such Evidence entries exist.
+
 ## DEBUG COMPLETE (goal: find_and_fix)
 
 ```markdown
@@ -1329,6 +1341,8 @@ Orchestrator presents checkpoint to user, gets response, spawns fresh continuati
 
 **Commit:** {hash}
 ```
+
+**Conditional Coverage Note:** If any Evidence entry recorded in this session has a non-empty `droppedRegions` from context-slice, insert a line directly under **Files Changed** (before **Commit**): `**Coverage Note:** {summary of which files/ranges were not fully inspected}`. Omit this line entirely when no such Evidence entries exist.
 
 Only return this after human verification confirms the fix.
 
