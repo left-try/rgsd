@@ -4,8 +4,11 @@
  * Given a file path, decides full-read vs. structural-slice based on a
  * token/line threshold (CTXSLICE-01). Below-threshold files are returned
  * byte-identical to a plain read (CTXSLICE-02). Above-threshold files
- * will return a structural skeleton (CTXSLICE-03) plus budget-capped,
- * pattern-ranked line-windows (CTXSLICE-04) — wired in subsequent tasks.
+ * return a structural skeleton of function/class/method signature lines
+ * (CTXSLICE-03), plus — when the caller supplies patterns — budget-capped,
+ * pattern-ranked line-windows alongside the skeleton (CTXSLICE-04). Any
+ * region trimmed by the budget is explicitly named in droppedRegions with
+ * a droppedLinesEstimate so coverage loss is never silent (CTXSLICE-05).
  *
  * This module performs only fs reads and pure string/regex work — zero
  * network calls, zero subprocess spawns, zero LLM calls (CTXSLICE-07).
@@ -98,6 +101,123 @@ function extractSkeleton(lines: string[]): SkeletonEntry[] {
   return results;
 }
 
+// ─── Pattern-ranked windows ──────────────────────────────────────────────────
+
+interface RankedWindow {
+  startLine: number;
+  endLine: number;
+  matchCount: number;
+  text: string;
+}
+
+interface DroppedRegion {
+  startLine: number;
+  endLine: number;
+  matchCount: number;
+}
+
+/**
+ * Find every line matching any of `patterns` (case-insensitive regex),
+ * build a context window of [matchLine - contextLines, matchLine +
+ * contextLines] (1-based, clamped to file bounds) per match, then merge
+ * overlapping/adjacent windows so no line is duplicated across windows.
+ * Windows are ranked by distinct-match count descending, ties broken by
+ * earliest start line (deterministic, stable order).
+ */
+function rankWindows(lines: string[], patterns: string[], contextLines: number): RankedWindow[] {
+  const compiled: RegExp[] = [];
+  for (const p of patterns || []) {
+    try {
+      compiled.push(new RegExp(p, 'i'));
+    } catch {
+      // Malformed pattern — skip it, never fatal (T-01-02).
+    }
+  }
+
+  if (compiled.length === 0) return [];
+
+  const matchLines: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const lineNo = i + 1;
+    if (compiled.some((re) => re.test(lines[i]))) {
+      matchLines.push(lineNo);
+    }
+  }
+
+  if (matchLines.length === 0) return [];
+
+  // Build raw [start, end] windows per match, clamped to file bounds.
+  const raw = matchLines
+    .map((m) => ({
+      start: Math.max(1, m - contextLines),
+      end: Math.min(lines.length, m + contextLines),
+      matches: [m],
+    }))
+    .sort((a, b) => a.start - b.start);
+
+  // Merge overlapping/touching windows.
+  const merged: { start: number; end: number; matches: number[] }[] = [];
+  for (const win of raw) {
+    const last = merged[merged.length - 1];
+    if (last && win.start <= last.end + 1) {
+      last.end = Math.max(last.end, win.end);
+      last.matches.push(...win.matches);
+    } else {
+      merged.push({ start: win.start, end: win.end, matches: [...win.matches] });
+    }
+  }
+
+  const ranked: RankedWindow[] = merged.map((m) => {
+    const distinctMatches = new Set(m.matches).size;
+    const text = lines.slice(m.start - 1, m.end).join('\n');
+    return { startLine: m.start, endLine: m.end, matchCount: distinctMatches, text };
+  });
+
+  ranked.sort((a, b) => {
+    if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
+    return a.startLine - b.startLine;
+  });
+
+  return ranked;
+}
+
+interface BudgetResult {
+  windows: RankedWindow[];
+  droppedRegions: DroppedRegion[];
+  droppedLinesEstimate: number;
+}
+
+/**
+ * Keep highest-ranked windows whole until adding the next window would
+ * exceed budgetTokens; the first window that does not fit and all
+ * lower-ranked windows are dropped and reported (CTXSLICE-05). Models the
+ * "estimate tokens, drop lowest-priority units, report what was omitted"
+ * structure of graphify's applyBudget (src/graphify.cts, ~line 305).
+ */
+function applyContextBudget(windows: RankedWindow[], budgetTokens: number): BudgetResult {
+  const kept: RankedWindow[] = [];
+  const droppedRegions: DroppedRegion[] = [];
+  let cumulativeTokens = 0;
+  let droppedLinesEstimate = 0;
+  let dropping = false;
+
+  for (const win of windows) {
+    if (!dropping) {
+      const winTokens = estimateTokens(win.text);
+      if (cumulativeTokens + winTokens <= budgetTokens) {
+        cumulativeTokens += winTokens;
+        kept.push(win);
+        continue;
+      }
+      dropping = true;
+    }
+    droppedRegions.push({ startLine: win.startLine, endLine: win.endLine, matchCount: win.matchCount });
+    droppedLinesEstimate += win.endLine - win.startLine + 1;
+  }
+
+  return { windows: kept, droppedRegions, droppedLinesEstimate };
+}
+
 // ─── sliceFile ───────────────────────────────────────────────────────────────
 
 interface SliceOptions {
@@ -113,8 +233,8 @@ interface SliceResult {
   lineCount: number;
   content?: string;
   skeleton?: SkeletonEntry[];
-  windows?: unknown[];
-  droppedRegions?: unknown[];
+  windows?: RankedWindow[];
+  droppedRegions?: DroppedRegion[];
   droppedLinesEstimate?: number;
   note?: string;
 }
@@ -125,11 +245,9 @@ interface SliceError {
 
 /**
  * Top-level entry point. Decides full-read vs. structural-slice based on
- * the threshold gate (CTXSLICE-01). Below-threshold files are returned in
- * full (CTXSLICE-02). Above-threshold body extraction (skeleton/windows/
- * dropped-region accounting) is wired in Tasks 2-3; here the gate and
- * result metadata fields are present and the sliced:true branch is
- * exercised with stubbed body fields.
+ * the threshold gate (CTXSLICE-01), and for above-threshold files returns
+ * a skeleton plus budget-capped, pattern-ranked windows (CTXSLICE-03,
+ * CTXSLICE-04) with every dropped region named (CTXSLICE-05).
  */
 function sliceFile(filePath: string, options: SliceOptions = {}): SliceResult | SliceError {
   let content: string;
@@ -144,14 +262,18 @@ function sliceFile(filePath: string, options: SliceOptions = {}): SliceResult | 
   const lineCount = lines.length;
   const tokenEstimate = estimateTokens(content);
 
-  const { thresholdTokens, thresholdLines } = CONTEXT_SLICE_DEFAULTS;
+  const { thresholdTokens, thresholdLines, budgetTokens: defaultBudget, contextLines: defaultContextLines } =
+    CONTEXT_SLICE_DEFAULTS;
 
   if (tokenEstimate <= thresholdTokens && lineCount <= thresholdLines) {
     return { sliced: false, path: filePath, tokenEstimate, lineCount, content };
   }
 
-  const skeleton = extractSkeleton(lines);
+  const budgetTokens = options.budgetTokens ?? defaultBudget;
+  const contextLines = options.contextLines ?? defaultContextLines;
   const patterns = options.patterns ?? [];
+
+  const skeleton = extractSkeleton(lines);
 
   if (patterns.length === 0) {
     return {
@@ -167,18 +289,18 @@ function sliceFile(filePath: string, options: SliceOptions = {}): SliceResult | 
     };
   }
 
-  // Pattern-ranked windowing + budget trim is wired in Task 3. Stubbed here
-  // so the gate, skeleton, and metadata fields are present and the
-  // patterns-supplied branch is exercised.
+  const ranked = rankWindows(lines, patterns, contextLines);
+  const { windows, droppedRegions, droppedLinesEstimate } = applyContextBudget(ranked, budgetTokens);
+
   return {
     sliced: true,
     path: filePath,
     tokenEstimate,
     lineCount,
     skeleton,
-    windows: [],
-    droppedRegions: [],
-    droppedLinesEstimate: 0,
+    windows,
+    droppedRegions,
+    droppedLinesEstimate,
   };
 }
 
@@ -188,5 +310,7 @@ export = {
   sliceFile,
   estimateTokens,
   extractSkeleton,
+  rankWindows,
+  applyContextBudget,
   CONTEXT_SLICE_DEFAULTS,
 };
