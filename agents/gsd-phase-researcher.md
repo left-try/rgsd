@@ -278,9 +278,9 @@ directory is a high-risk signal. Flag such packages `[SUS]` even if the seam rat
 
 | File | droppedRegions | Dropped Ranges |
 |------|-----------------|-----------------|
-| [path/to/file.ext] | [N] | [start-end, start-end] |
+| [path/to/file.ext] | [N] | [start-end, start-end] or "partial — skeleton + N pattern-matched windows only" or "skeleton-only, 0 windows" |
 
-State explicitly "None — all inspected in-repo files were fully covered" when no in-repo file inspected via context-slice had any non-empty droppedRegions.
+State explicitly "None — all inspected in-repo files were fully covered" only when every in-repo file inspected via context-slice had non-empty kept `windows` covering all skeleton-bounded regions AND empty `droppedRegions` — a file with `sliced: true` and zero or partial window coverage is NOT "fully covered" even when `droppedRegions` is empty.
 
 ## Standard Stack
 
@@ -640,7 +640,7 @@ When this phase's research requires inspecting existing in-repo source files (as
    - `sliced: false` → Read the file in full (byte-identical to a plain read).
    - `error` → Read the file in full as a fail-open fallback — never skip a file silently.
    - `sliced: true` → do NOT Read the full file. Work from `skeleton` + `windows[].text` first. Only Read a specific region with `offset`/`limit` (a window of `max(1, line-20)` to `line+20`) when a skeleton entry matches one of the phase's key requirement terms but its line falls outside every kept window (its body was dropped).
-4. **Track coverage:** for every in-repo file inspected this way where `droppedRegions` was non-empty, record the file path and dropped ranges for the `### Context-Slice Coverage Notes` subsection in `output_format` below.
+4. **Track coverage:** `droppedRegions` alone is NOT a reliable full-coverage signal — it only reports windows that matched a `--pattern` and were then trimmed by budget; it never reports body lines that never matched any pattern at all (including the entire body when `windows` is empty). Therefore record a file in the `### Context-Slice Coverage Notes` subsection in `output_format` below whenever EITHER (i) `droppedRegions` is non-empty (record the dropped ranges), OR (ii) the result is `sliced: true` and `windows` is empty or leaves skeleton-bounded regions outside every kept window and not individually re-Read (record as `"partial — skeleton + N pattern-matched windows only"`, or `"skeleton-only, 0 windows"` when windows is empty). Never rely on non-empty `droppedRegions` alone to decide whether a file belongs in this table.
 
 This step applies ONLY to in-repo source files inspected directly via Read — it never applies to external library docs/web content fetched via the `<tool_strategy>` provider seam.
 
