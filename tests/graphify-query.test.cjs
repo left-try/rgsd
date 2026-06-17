@@ -17,6 +17,7 @@ const {
   safeReadJson,
   buildAdjacencyMap,
   seedAndExpand,
+  findSubstringSeeds,
   applyBudget,
 } = require('../gsd-core/bin/lib/graphify.cjs');
 
@@ -25,6 +26,7 @@ const {
   writeGraphJson,
   writeSnapshotJson,
   SAMPLE_GRAPH,
+  SESSION_EXPIRY_GRAPH,
 } = require('./helpers/graphify.cjs');
 
 // ─── Shared fixture: surfaced-config-dir ─────────────────────────────────────
@@ -197,6 +199,39 @@ describe('query', () => {
       assert.ok(nodeIds.includes('n2'), '1-hop');
       assert.ok(nodeIds.includes('n3'), '1-hop');
       assert.ok(!nodeIds.includes('n4'), 'n4 is 2 hops away');
+    });
+
+    // SEED-02 golden regression: substring tier must preserve legacy expansion (D-01)
+    test('golden: auth substring node ids, seeds, and edge count unchanged', () => {
+      const result = seedAndExpand(SAMPLE_GRAPH, 'auth');
+      assert.deepEqual(result.nodes.map(n => n.id).sort(), ['n1', 'n2', 'n3', 'n4']);
+      assert.deepEqual([...result.seeds].sort(), ['n1']);
+      assert.strictEqual(result.edges.length, 4);
+    });
+
+    test('golden: credentials substring node ids, seeds, and edge count unchanged', () => {
+      const result = seedAndExpand(SAMPLE_GRAPH, 'credentials');
+      assert.deepEqual(result.nodes.map(n => n.id).sort(), ['n1', 'n2', 'n3', 'n4']);
+      assert.deepEqual([...result.seeds].sort(), ['n2']);
+      assert.strictEqual(result.edges.length, 4);
+    });
+
+    test('auth with maxHops=2 returns n1,n2,n3,n4', () => {
+      const result = seedAndExpand(SAMPLE_GRAPH, 'auth', 2);
+      assert.deepEqual(result.nodes.map(n => n.id).sort(), ['n1', 'n2', 'n3', 'n4']);
+    });
+
+    // SEED-01: fuzzy tier-2 fallback when substring finds zero seeds
+    test('NL session expiry query seeds evictStaleToken via fuzzy fallback', () => {
+      const result = seedAndExpand(SESSION_EXPIRY_GRAPH, 'where do we handle session expiry');
+      assert.ok(result.seeds.has('sess-1'), 'sess-1 (evictStaleToken) must be a seed');
+    });
+
+    test('findSubstringSeeds exported and matches legacy label+description predicate', () => {
+      assert.strictEqual(typeof findSubstringSeeds, 'function');
+      const seeds = findSubstringSeeds(SAMPLE_GRAPH, 'auth');
+      assert.ok(seeds.some(n => n.id === 'n1'));
+      assert.ok(!seeds.some(n => n.id === 'n2'), 'n2 matches via description only in seedAndExpand inline filter');
     });
   });
 
