@@ -100,6 +100,25 @@ const SAMPLE_NODES_MINIMAL = [
   { id: 'n2', label: 'B', description: '', type: 'model' },
 ];
 
+const SESSION_EXPIRY_GRAPH = {
+  nodes: [
+    {
+      id: 'sess-1',
+      label: 'evictStaleToken',
+      description: 'Evicts expired session tokens when TTL exceeded',
+      type: 'function',
+    },
+    {
+      id: 'decoy-1',
+      label: 'EmailService',
+      description: 'Sends notification emails',
+      type: 'service',
+    },
+  ],
+  edges: [],
+  hyperedges: [],
+};
+
 module.exports = {
   enableGraphify,
   writeGraphJson,
@@ -109,4 +128,5 @@ module.exports = {
   makeStatusProject,
   SAMPLE_GRAPH,
   SAMPLE_NODES_MINIMAL,
+  SESSION_EXPIRY_GRAPH,
 };
