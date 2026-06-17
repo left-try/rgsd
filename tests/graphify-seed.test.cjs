@@ -1,8 +1,10 @@
 'use strict';
 
 // Unit tests for symbol-aware fuzzy seeding utilities (Phase 3 plan 03-01).
-// Refs SEED-01, SEED-04.
+// Refs SEED-01, SEED-03, SEED-04.
 
+const fs = require('fs');
+const path = require('path');
 const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -73,4 +75,48 @@ describe('matchFuzzySeeds', () => {
     const second = matchFuzzySeeds(...args).map((n) => n.id);
     assert.deepEqual(first, second);
   });
+});
+
+describe('applyBudget static guard (SEED-03)', () => {
+  const graphifySrc = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'graphify.cts'),
+    'utf8'
+  );
+
+  test('CONFIDENCE_ORDER drop sequence unchanged in applyBudget', () => {
+    assert.match(
+      graphifySrc,
+      /const CONFIDENCE_ORDER = \['AMBIGUOUS', 'INFERRED', 'EXTRACTED'\]/
+    );
+  });
+
+  test('applyBudget does not call seeding helpers', () => {
+    const fnMatch = graphifySrc.match(/function applyBudget[\s\S]*?(?=\nfunction |\n\/\/ ─)/);
+    assert.ok(fnMatch, 'applyBudget function body must exist');
+    const body = fnMatch[0];
+    assert.ok(!body.includes('matchFuzzySeeds'), 'applyBudget must not call matchFuzzySeeds');
+    assert.ok(!body.includes('findSubstringSeeds'), 'applyBudget must not call findSubstringSeeds');
+  });
+});
+
+describe('seeding functions perform no filesystem writes (SEED-04)', () => {
+  const graphifySrc = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'graphify.cts'),
+    'utf8'
+  );
+
+  function extractFunctionBody(src, name) {
+    const re = new RegExp(`function ${name}\\([\\s\\S]*?(?=\\nfunction |\\ninterface |\\nconst [A-Z]|\\n// ─)`);
+    const match = src.match(re);
+    assert.ok(match, `${name} must exist`);
+    return match[0];
+  }
+
+  for (const fn of ['findSubstringSeeds', 'matchFuzzySeeds', 'seedAndExpand']) {
+    test(`${fn} has no writeFileSync or writeSnapshot calls`, () => {
+      const body = extractFunctionBody(graphifySrc, fn);
+      assert.ok(!body.includes('writeFileSync'), `${fn} must not write files`);
+      assert.ok(!body.includes('writeSnapshot'), `${fn} must not write snapshots`);
+    });
+  }
 });

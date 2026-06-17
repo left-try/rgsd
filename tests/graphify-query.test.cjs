@@ -351,6 +351,18 @@ describe('query', () => {
       assert.strictEqual(typeof result.total_nodes, 'number');
       assert.strictEqual(typeof result.total_edges, 'number');
     });
+
+    // SEED-01: end-to-end NL query via public graphifyQuery API
+    test('NL session expiry finds evictStaleToken via graphifyQuery', () => {
+      enableGraphify(planningDir);
+      writeGraphJson(planningDir, SESSION_EXPIRY_GRAPH);
+      const result = graphifyQuery(tmpDir, 'where do we handle session expiry');
+      assert.ok(!result.error, `unexpected error: ${result.error}`);
+      assert.ok(
+        result.nodes.some(n => n.id === 'sess-1'),
+        'sess-1 (evictStaleToken) must appear in graphifyQuery nodes'
+      );
+    });
   });
 
   describe('graphifyDiff', () => {
