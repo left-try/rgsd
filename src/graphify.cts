@@ -356,6 +356,17 @@ function matchFuzzySeeds(
   return scored.map(s => s.node);
 }
 
+/**
+ * Tier-1 seed selection: case-insensitive substring match on label and description (D-01).
+ */
+function findSubstringSeeds(graph: Graph, term: string): GraphNode[] {
+  const lowerTerm = term.toLowerCase();
+  return (graph.nodes || []).filter(n =>
+    (n.label || '').toLowerCase().includes(lowerTerm) ||
+    (n.description || '').toLowerCase().includes(lowerTerm)
+  );
+}
+
 interface ExpandResult {
   nodes: GraphNode[];
   edges: GraphEdge[];
@@ -364,19 +375,18 @@ interface ExpandResult {
 }
 
 /**
- * Seed-then-expand query: find nodes matching term, then BFS-expand up to maxHops.
- * Matches on node label and description (case-insensitive substring, D-01).
+ * Seed-then-expand query: two-tier seed selection (SEED-01/SEED-02), then BFS-expand up to maxHops.
+ * Tier 1: case-insensitive substring on label+description via findSubstringSeeds.
+ * Tier 2: matchFuzzySeeds only when tier 1 finds zero seeds.
  */
 function seedAndExpand(graph: Graph, term: string, maxHops = 2): ExpandResult {
-  const lowerTerm = term.toLowerCase();
   const nodeMap = Object.fromEntries((graph.nodes || []).map(n => [n.id, n]));
   const adj = buildAdjacencyMap(graph);
 
-  // Seed: match on label and description (case-insensitive substring)
-  const seeds = (graph.nodes || []).filter(n =>
-    (n.label || '').toLowerCase().includes(lowerTerm) ||
-    (n.description || '').toLowerCase().includes(lowerTerm)
-  );
+  let seeds = findSubstringSeeds(graph, term);
+  if (seeds.length === 0) {
+    seeds = matchFuzzySeeds(graph, term);
+  }
 
   // BFS expand from seeds
   const visitedNodes = new Set(seeds.map(n => n.id));
@@ -735,6 +745,7 @@ export = {
   splitSymbolTokens,
   buildNodeSearchTokens,
   matchFuzzySeeds,
+  findSubstringSeeds,
   seedAndExpand,
   applyBudget,
   // Status (Phase 2)
