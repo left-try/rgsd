@@ -238,6 +238,124 @@ function buildAdjacencyMap(graph: Graph): Record<string, AdjEntry[]> {
   return adj;
 }
 
+// ─── Fuzzy seed utilities (Phase 3) ──────────────────────────────────────────
+
+const MAX_SEED_INPUT_LENGTH = 2000;
+
+const SEED_STOPWORDS = Object.freeze(new Set([
+  'where', 'do', 'we', 'the', 'a', 'an', 'is', 'are', 'how', 'what', 'when',
+  'in', 'on', 'at', 'for', 'to', 'of', 'and', 'or', 'our', 'your', 'this', 'that', 'does',
+]));
+
+const SEED_SYNONYMS = Object.freeze({
+  expiry: Object.freeze(['expire', 'expired', 'stale', 'ttl', 'timeout', 'evict']),
+  session: Object.freeze(['session', 'token', 'auth', 'login']),
+  handle: Object.freeze(['handle', 'manage', 'process', 'evict', 'remove']),
+  auth: Object.freeze(['auth', 'login', 'credential', 'token', 'password']),
+  user: Object.freeze(['user', 'account', 'profile']),
+  expire: Object.freeze(['expire', 'expired', 'stale', 'ttl', 'evict']),
+  stale: Object.freeze(['stale', 'expired', 'ttl', 'evict']),
+} as const);
+
+const FUZZY_SEED_MIN_SCORE = 2;
+
+function substringMatches(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
+}
+
+/**
+ * Lowercase query tokenization: strip punctuation, drop stopwords and short tokens.
+ * Returns [] when input exceeds MAX_SEED_INPUT_LENGTH (T-03-01 mitigation).
+ */
+function tokenizeQuery(term: string): string[] {
+  if (!term || term.length > MAX_SEED_INPUT_LENGTH) return [];
+  const normalized = term.toLowerCase().replace(/[^\w\s]/g, ' ');
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of normalized.split(/\s+/)) {
+    const tok = raw.trim();
+    if (tok.length < 3) continue;
+    if (SEED_STOPWORDS.has(tok)) continue;
+    if (!seen.has(tok)) {
+      seen.add(tok);
+      result.push(tok);
+    }
+  }
+  return result;
+}
+
+/**
+ * Split camelCase, PascalCase, snake_case, and kebab-case into lowercase word tokens.
+ */
+function splitSymbolTokens(identifier: string): string[] {
+  if (!identifier) return [];
+  if (identifier.length > MAX_SEED_INPUT_LENGTH) return [];
+  const spaced = identifier
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/[\s_\-]+/g, ' ');
+  return spaced.split(' ').map(t => t.toLowerCase()).filter(t => t.length > 0);
+}
+
+/** Union of label/description tokens and symbol-split label tokens for a node. */
+function buildNodeSearchTokens(node: GraphNode): Set<string> {
+  const tokens = new Set<string>();
+  for (const t of tokenizeQuery(node.label || '')) tokens.add(t);
+  for (const t of tokenizeQuery(node.description || '')) tokens.add(t);
+  for (const t of splitSymbolTokens(node.label || '')) tokens.add(t);
+  return tokens;
+}
+
+function queryTokenMatchesNode(qt: string, nodeTokens: Set<string>): boolean {
+  for (const nt of nodeTokens) {
+    if (substringMatches(qt, nt)) return true;
+  }
+  const synonyms = (SEED_SYNONYMS as Record<string, readonly string[]>)[qt] || [];
+  for (const syn of synonyms) {
+    for (const nt of nodeTokens) {
+      if (substringMatches(syn, nt)) return true;
+    }
+  }
+  for (const nt of nodeTokens) {
+    if (nt.length >= 4 && substringMatches(nt, qt)) return true;
+  }
+  return false;
+}
+
+/**
+ * Score graph nodes by query-token overlap against label, description, symbol tokens,
+ * and static synonym expansion. No filesystem or network I/O.
+ */
+function matchFuzzySeeds(
+  graph: Graph,
+  term: string,
+  options: { minScore?: number } = {}
+): GraphNode[] {
+  const minScore = options.minScore ?? FUZZY_SEED_MIN_SCORE;
+  const queryTokens = tokenizeQuery(term);
+  if (queryTokens.length === 0) return [];
+
+  const scored: Array<{ node: GraphNode; score: number }> = [];
+  for (const node of graph.nodes || []) {
+    const nodeTokens = buildNodeSearchTokens(node);
+    let score = 0;
+    for (const qt of queryTokens) {
+      if (queryTokenMatchesNode(qt, nodeTokens)) score += 1;
+    }
+    if (score >= minScore) {
+      scored.push({ node, score });
+    }
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return String(a.node.id).localeCompare(String(b.node.id));
+  });
+
+  return scored.map(s => s.node);
+}
+
 interface ExpandResult {
   nodes: GraphNode[];
   edges: GraphEdge[];
@@ -609,6 +727,14 @@ export = {
   graphifyQuery,
   safeReadJson,
   buildAdjacencyMap,
+  // Fuzzy seed utilities (Phase 3)
+  SEED_STOPWORDS,
+  SEED_SYNONYMS,
+  FUZZY_SEED_MIN_SCORE,
+  tokenizeQuery,
+  splitSymbolTokens,
+  buildNodeSearchTokens,
+  matchFuzzySeeds,
   seedAndExpand,
   applyBudget,
   // Status (Phase 2)
