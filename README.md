@@ -83,6 +83,28 @@ Full index: [docs/README.md](docs/README.md). Other languages: [日本語](READM
 
 ---
 
+## Context-aware token budgeting
+
+GSD Core includes a built-in context-slice engine that pre-filters large source files before they are loaded into agent contexts. Instead of loading an entire file, agents receive a structural skeleton (all function and class signatures) plus pattern-ranked excerpt windows targeting the code most relevant to the current task — security patterns for the reviewer, stack-trace identifiers for the debugger, requirement symbols for the researcher.
+
+**Result:** a real 74.5% reduction in tokens delivered to `gsd-code-reviewer` for a 5 000-token file (5 261 → 1 341 tokens), with no loss of signature coverage and full disclosure of any dropped regions.
+
+The feature is off by default and opt-in per project:
+
+```bash
+gsd-tools config-set context-slice.enabled true
+```
+
+Once enabled, `gsd-code-reviewer`, `gsd-debugger`, and `gsd-phase-researcher` use it automatically. You can also call it directly:
+
+```bash
+gsd-tools context-slice <file> [--pattern <regex>] [--budget-tokens N] [--context-lines N]
+```
+
+See [docs/CLI-TOOLS.md#context-slice](docs/CLI-TOOLS.md#context-slice) for full reference.
+
+---
+
 ## Why it works
 
 Most AI-coding setups fail at scale because context bloat silently degrades output quality, there is no shared memory between sessions, and nothing verifies that code actually works. GSD Core solves all three: heavy work runs in fresh subagents, structured artifacts like `STATE.md` and `CONTEXT.md` survive session boundaries, and the verify step walks through what was built and generates fix plans before a phase is declared done. See [docs/explanation/context-engineering.md](docs/explanation/context-engineering.md) for the full reasoning.

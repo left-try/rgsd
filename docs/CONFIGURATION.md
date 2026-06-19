@@ -614,6 +614,24 @@ gsd-tools query config-set mempalace.enabled true
 gsd-tools query config-set mempalace.cross_project_tunnels true
 ```
 
+<a id="context-slice-settings"></a>
+### Context-Slice Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `context-slice.enabled` | boolean | `false` | Enable context-aware pre-filtering of large source files. When `true`, `gsd-code-reviewer`, `gsd-debugger`, and `gsd-phase-researcher` call `gsd-tools context-slice` before reading in-scope files. Files below 3 000 tokens / 750 lines pass through unchanged (`sliced: false`). Files above either threshold return a structural skeleton plus pattern-ranked excerpt windows (`sliced: true`). Enable with `gsd-tools config-set context-slice.enabled true`. Added in v1.5.0. |
+
+**Defaults (not overridable via config — set per call with CLI flags):**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--budget-tokens` | `6000` | Maximum tokens of window content to return when slicing |
+| `--context-lines` | `20` | Lines of context above and below each pattern match |
+
+**Coverage disclosure:** when `sliced: true` and the budget is exhausted, dropped regions are reported in `droppedRegions` (with `start`, `end`, and `matchCount`) and rolled into `droppedLinesEstimate`. Agents surface this as `coverage_gaps` in REVIEW.md, Evidence entries in debug output, and a `### Context-Slice Coverage Notes` subsection in RESEARCH.md — nothing is silently lost.
+
+---
+
 <a id="graphify-settings"></a>
 ### Graphify Settings
 

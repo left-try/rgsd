@@ -516,6 +516,45 @@ User-facing entry point: `/gsd-graphify` (see [Command Reference](COMMANDS.md#gs
 
 ---
 
+## Context-Slice
+
+Pre-filter large source files into a structural skeleton + pattern-ranked excerpt windows before loading them into agent contexts. Reduces token usage while preserving full signature coverage and disclosing any dropped regions.
+
+Requires `context-slice.enabled: true` in `config.json` (see [Configuration Reference](CONFIGURATION.md)):
+
+```bash
+gsd-tools config-set context-slice.enabled true
+```
+
+```bash
+# Slice a file with default settings (threshold: 3 000 tokens / 750 lines)
+gsd-tools context-slice <file>
+
+# Slice with explicit pattern groups and budget
+gsd-tools context-slice <file> \
+  --pattern "(auth|login|session)" \
+  --pattern "(catch\s*\(|throw )" \
+  --budget-tokens 6000 \
+  --context-lines 20
+
+# Explicit subcommand form (equivalent)
+gsd-tools context-slice slice <file> [flags]
+```
+
+**Response shapes:**
+
+| `sliced` | Meaning |
+|----------|---------|
+| `false` | File is below the threshold — full content returned as-is |
+| `true` | File exceeded threshold — `skeleton` + `windows` returned; `droppedRegions` lists any budget-capped sections |
+| `disabled` | Capability is not enabled for this project |
+
+When `sliced: true` and `droppedRegions` is non-empty, agents surface a coverage note in their output artifacts (REVIEW.md `coverage_gaps`, debug Evidence, RESEARCH.md Coverage Notes) so nothing is silently lost.
+
+**Integration:** `gsd-code-reviewer`, `gsd-debugger`, and `gsd-phase-researcher` call context-slice automatically on in-scope files when the capability is enabled.
+
+---
+
 ## Module Architecture
 
 | Module | File | Exports |

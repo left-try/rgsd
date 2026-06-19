@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.5.0](https://www.npmjs.com/package/@opengsd/gsd-core/v/1.5.0) - TBD
+
+### Added
+
+- **Context-slice engine** — `gsd-tools context-slice <file>` pre-filters large source files into a structural skeleton (all function/class signatures) plus pattern-ranked excerpt windows, capped by a token budget. Files below 3 000 tokens / 750 lines pass through unchanged. Dropped regions are reported explicitly — never silently truncated.
+- **Context-slice capability registration** — `context-slice.enabled` config key (default: off) gates the feature per project. Register with `gsd-tools config-set context-slice.enabled true`.
+- **Leaf-agent context-slice integration** — `gsd-code-reviewer`, `gsd-debugger`, and `gsd-phase-researcher` now call context-slice before reading in-scope files when the capability is enabled. Each agent uses domain-specific pattern groups (security/auth/error regexes for the reviewer; stack-trace identifiers for the debugger; phase requirement symbols for the researcher). Coverage gaps are disclosed in output artifacts (`coverage_gaps` in REVIEW.md, Evidence entries in debug output, Coverage Notes in RESEARCH.md).
+- **Symbol-aware fuzzy seed matching for graphify** — `tokenizeQuery`, `splitSymbolTokens`, `buildNodeSearchTokens`, and `matchFuzzySeeds` added to the graphify engine. `SEED_STOPWORDS` and `SEED_SYNONYMS` are frozen constants; input is capped at 2 000 chars; no I/O in the matcher.
+- **Two-tier `seedAndExpand`** — `findSubstringSeeds` handles tier-1 exact substring matching; `matchFuzzySeeds` fires as a fallback only when tier-1 returns nothing. BFS expand and `applyBudget` bodies are unchanged.
+
+### Measured
+
+- 74.5% reduction in tokens delivered to `gsd-code-reviewer` for a representative 5 261-token file (`src/graphify.cts`) — 5 261 → 1 341 tokens — with zero dropped regions for the standard security pattern set.
+
 ## [1.3.1](https://www.npmjs.com/package/@opengsd/gsd-core/v/1.3.1) - 2026-06-04
 
 ### Security
