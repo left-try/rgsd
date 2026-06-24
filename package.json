@@ -1,11 +1,11 @@
 {
-  "name": "@opengsd/gsd-core",
-  "version": "1.5.0-rc.4",
-  "description": "GSD Core is a meta-prompting, context engineering, and spec-driven development system for AI coding agents.",
+  "name": "rgsd",
+  "version": "0.1.0",
+  "description": "rgsd is a spec-driven development system for AI coding agents powered by a Recursive Language Model (RLM) inference loop.",
   "bin": {
-    "gsd-core": "bin/install.js",
-    "gsd-tools": "gsd-core/bin/gsd-tools.cjs",
-    "gsd_run": "gsd-core/bin/gsd_run"
+    "rgsd": "bin/install.js",
+    "rgsd-tools": "gsd-core/bin/gsd-tools.cjs",
+    "rgsd_run": "gsd-core/bin/gsd_run"
   },
   "files": [
     "bin",
@@ -20,26 +20,26 @@
     "scripts"
   ],
   "keywords": [
+    "rlm",
+    "recursive-language-models",
     "claude",
     "claude-code",
     "ai",
-    "meta-prompting",
     "context-engineering",
     "spec-driven-development",
-    "gemini",
-    "gemini-cli",
+    "agent",
     "codex",
-    "codex-cli"
+    "gemini-cli"
   ],
-  "author": "OpenGSD",
+  "author": "Ivan Stakhov",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/open-gsd/gsd-core.git"
+    "url": "git+https://github.com/ivanstakhov/rgsd.git"
   },
-  "homepage": "https://github.com/open-gsd/gsd-core",
+  "homepage": "https://github.com/ivanstakhov/rgsd",
   "bugs": {
-    "url": "https://github.com/open-gsd/gsd-core/issues"
+    "url": "https://github.com/ivanstakhov/rgsd/issues"
   },
   "publishConfig": {
     "access": "public"

@@ -1,27 +1,24 @@
 <div align="center">
 
-# GSD Core
+# rgsd
 
-**Git. Ship. Done.**
+**Spec-driven development for AI coding agents, powered by a Recursive Language Model inference loop.**
 
-**English** · [Português](README.pt-BR.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md)
-
-**A light-weight meta-prompting, context engineering, and spec-driven development system for Claude Code, OpenCode, Gemini CLI, Kimi CLI, Kilo, Codex, Copilot, Cursor, Windsurf, and more.**
-
-[![npm version](https://img.shields.io/npm/v/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@opengsd/gsd-core)
-[![npm downloads](https://img.shields.io/npm/dm/%40opengsd%2Fgsd-core?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/@opengsd/gsd-core)
-[![Tests](https://img.shields.io/github/actions/workflow/status/open-gsd/gsd-core/test.yml?branch=main&style=for-the-badge&logo=github&label=Tests)](https://github.com/open-gsd/gsd-core/actions/workflows/test.yml)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/mYgfVNfA2r)
-[![GitHub stars](https://img.shields.io/github/stars/open-gsd/gsd-core?style=for-the-badge&logo=github&color=181717)](https://github.com/open-gsd/gsd-core)
+[![npm version](https://img.shields.io/npm/v/rgsd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/rgsd)
+[![npm downloads](https://img.shields.io/npm/dm/rgsd?style=for-the-badge&logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/rgsd)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)](LICENSE)
 
 </div>
 
 ---
 
-## What is GSD Core
+## What is rgsd
 
-GSD Core is a context-engineering and spec-driven development framework that drives AI coding agents (Claude Code, Codex, Gemini CLI, Kimi CLI, Copilot, Cursor, and more) through a disciplined phase loop. It solves [context rot](docs/explanation/context-engineering.md) — the quality degradation that accumulates as an AI fills its context window — by running all heavy research, planning, and execution work in fresh-context subagents while keeping your main session lean.
+**rgsd** is a fork of [gsd-core](https://github.com/open-gsd/gsd-core) that replaces the linear subagent model with an **RLM (Recursive Language Model) inference loop** — agents that can decompose problems by recursively calling themselves, rather than spawning one-shot leaf agents.
+
+Where gsd-core runs planning and execution in flat, isolated subagents, rgsd treats each agent as a first-class RLM node: it can examine the context it receives, decide what sub-problems to delegate, and invoke child agents as function calls — all within a structured phase loop.
+
+The core insight from [Recursive Language Models](https://github.com/alexzhang13/rlm): a model operating inside a code environment can call itself as a function, deferring context decomposition decisions to the model itself rather than hardcoding them in the orchestrator.
 
 ---
 
@@ -31,117 +28,80 @@ Each milestone repeats the same five-step loop, one phase at a time:
 
 1. **Discuss** — capture implementation decisions before anything is planned
 2. **Plan** — research, decompose, and verify the plan fits a fresh context window
-3. **Execute** — run plans in parallel waves; each executor starts with a clean 200k-token context
+3. **Execute** — run plans in recursive waves; each executor can spawn child agents and call back into itself when context exceeds its budget
 4. **Verify** — walk through what was built; diagnose and fix before declaring done
 5. **Ship** — create the PR, archive the phase, repeat for the next one
+
+The difference from gsd-core is in step 3: instead of a flat executor receiving a fixed context slice, rgsd executors operate in an RLM loop — they receive a structural skeleton of large files via the **context-slice engine**, query the **graphify knowledge graph** for relevant symbols, and recursively narrow context before generating code.
+
+---
+
+## Key features
+
+### RLM inference loop
+Agents call themselves recursively to decompose arbitrarily large contexts. No fixed context-window ceiling on what a single phase can reason about.
+
+### Context-slice engine
+`rgsd-tools context-slice <file>` pre-filters large source files into a structural skeleton (all function/class signatures) plus pattern-ranked excerpt windows, capped by a configurable token budget. Files below 3 000 tokens pass through unchanged. Dropped regions are reported explicitly — never silently truncated.
+
+```bash
+rgsd-tools config-set context-slice.enabled true
+rgsd-tools context-slice src/graphify.cts --budget-tokens 2000
+```
+
+### Symbol-aware graphify queries
+The graphify knowledge graph resolves queries through a two-tier seed matcher: exact substring matching first, fuzzy symbol-tokenized fallback second. Natural-language queries like `"find authentication middleware"` reliably expand to the right graph nodes even when no exact token matches exist.
 
 ---
 
 ## Quickstart
 
 ```bash
-npx @opengsd/gsd-core@latest
+npx rgsd@latest
 ```
 
-The installer prompts for your runtime (Claude Code, OpenCode, Gemini CLI, Kimi CLI, Kilo, Codex, Copilot, Cursor, Windsurf, and more) and whether to install globally or locally. The installer is required for cross-runtime compatibility — do not copy files from `agents/` or `commands/` directly.
+The installer prompts for your runtime (Claude Code, Gemini CLI, Codex, Cursor, Windsurf, and more) and whether to install globally or locally.
 
-On another runtime or without Node.js? See [Install on your runtime](docs/how-to/install-on-your-runtime.md).
+---
 
-Once installed, start your first project:
+## Configuration
 
 ```bash
-/gsd-new-project
+rgsd-tools config-set context-slice.enabled true   # enable context-slice
+rgsd-tools config-set graphify.enabled true         # enable knowledge graph
 ```
 
-New here? Follow [Your first project](docs/tutorials/your-first-project.md) for a guided walkthrough from install to first shipped phase.
+Full configuration reference: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
 
 ---
 
-## Documentation
-
-**Tutorials** — learning by doing:
-- [Your first project](docs/tutorials/your-first-project.md)
-- [Onboarding an existing codebase](docs/tutorials/onboarding-an-existing-codebase.md)
-
-**How-to guides** — task-focused recipes:
-- [Install on your runtime](docs/how-to/install-on-your-runtime.md)
-- [Plan a phase](docs/how-to/plan-a-phase.md)
-- [Verify and ship](docs/how-to/verify-and-ship.md)
-- … [see all how-to guides](docs/README.md#how-to-guides)
-
-**Reference** — authoritative facts:
-- [Commands](docs/COMMANDS.md)
-- [Configuration](docs/CONFIGURATION.md)
-- [CLI tools](docs/CLI-TOOLS.md)
-
-**Explanation** — concepts and design decisions:
-- [Context engineering](docs/explanation/context-engineering.md)
-- [The phase loop](docs/explanation/the-phase-loop.md)
-- [Architecture](docs/ARCHITECTURE.md)
-
-Full index: [docs/README.md](docs/README.md). Other languages: [日本語](README.ja-JP.md) · [한국어](README.ko-KR.md) · [Português](README.pt-BR.md) · [简体中文](README.zh-CN.md).
-
----
-
-## Context-aware token budgeting
-
-GSD Core includes a built-in context-slice engine that pre-filters large source files before they are loaded into agent contexts. Instead of loading an entire file, agents receive a structural skeleton (all function and class signatures) plus pattern-ranked excerpt windows targeting the code most relevant to the current task — security patterns for the reviewer, stack-trace identifiers for the debugger, requirement symbols for the researcher.
-
-**Result:** a real 74.5% reduction in tokens delivered to `gsd-code-reviewer` for a 5 000-token file (5 261 → 1 341 tokens), with no loss of signature coverage and full disclosure of any dropped regions.
-
-The feature is off by default and opt-in per project:
+## CLI reference
 
 ```bash
-gsd-tools config-set context-slice.enabled true
+rgsd-tools context-slice <file> [--pattern <regex>] [--budget-tokens N] [--context-lines N]
+rgsd-tools graphify build
+rgsd-tools graphify query <term>
+rgsd-tools graphify status
 ```
 
-Once enabled, `gsd-code-reviewer`, `gsd-debugger`, and `gsd-phase-researcher` use it automatically. You can also call it directly:
-
-```bash
-gsd-tools context-slice <file> [--pattern <regex>] [--budget-tokens N] [--context-lines N]
-```
-
-See [docs/CLI-TOOLS.md#context-slice](docs/CLI-TOOLS.md#context-slice) for full reference.
+Full CLI reference: [docs/CLI-TOOLS.md](docs/CLI-TOOLS.md)
 
 ---
 
-## Why it works
+## Relationship to gsd-core
 
-Most AI-coding setups fail at scale because context bloat silently degrades output quality, there is no shared memory between sessions, and nothing verifies that code actually works. GSD Core solves all three: heavy work runs in fresh subagents, structured artifacts like `STATE.md` and `CONTEXT.md` survive session boundaries, and the verify step walks through what was built and generates fix plans before a phase is declared done. See [docs/explanation/context-engineering.md](docs/explanation/context-engineering.md) for the full reasoning.
+rgsd is a fork of [gsd-core](https://github.com/open-gsd/gsd-core). It inherits the full phase-loop workflow, all commands, and the installer. The additions are:
 
-Troubleshooting? See [docs/how-to/recover-and-troubleshoot.md](docs/how-to/recover-and-troubleshoot.md).
-
----
-
-## Community
-
-| Project | Platform |
-|---------|----------|
-| [gsd-opencode](https://github.com/rokicool/gsd-opencode) | Original OpenCode port |
-| [Discord](https://discord.gg/mYgfVNfA2r) | Community support |
-
----
-
-## Star History
-
-<a href="https://star-history.com/#open-gsd/gsd-core&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=open-gsd/gsd-core&type=Date" />
- </picture>
-</a>
+| Feature | gsd-core | rgsd |
+|---------|----------|------|
+| Phase loop (discuss/plan/execute/verify/ship) | ✓ | ✓ |
+| Subagent isolation | flat | recursive (RLM) |
+| Context-slice engine | ✓ | ✓ (extended) |
+| Graphify knowledge graph | ✓ | ✓ + fuzzy symbol matching |
+| RLM inference loop in executor | — | ✓ |
 
 ---
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-**Claude Code is powerful. GSD Core makes it reliable.**
-
-</div>
+MIT — see [LICENSE](LICENSE).

@@ -1,12 +1,27 @@
 # Changelog
 
-All notable changes to GSD will be documented in this file.
+All notable changes to rgsd will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [1.5.0](https://www.npmjs.com/package/@opengsd/gsd-core/v/1.5.0) - TBD
+## [0.1.0](https://www.npmjs.com/package/rgsd/v/0.1.0) - 2026-06-24
+
+Initial release of **rgsd** — a fork of [gsd-core](https://github.com/open-gsd/gsd-core) extended with a Recursive Language Model (RLM) inference loop.
+
+### Added
+
+- **RLM inference loop** — executor agents operate as RLM nodes: they can recursively call themselves to decompose contexts that exceed their budget, rather than receiving a fixed flat slice.
+- **Context-slice engine** — `rgsd-tools context-slice <file>` pre-filters large source files into a structural skeleton (all function/class signatures) plus pattern-ranked excerpt windows, capped by a token budget. Files below 3 000 tokens / 750 lines pass through unchanged. Dropped regions are reported explicitly — never silently truncated.
+- **Context-slice capability registration** — `context-slice.enabled` config key (default: off) gates the feature per project. Register with `rgsd-tools config-set context-slice.enabled true`.
+- **Leaf-agent context-slice integration** — `gsd-code-reviewer`, `gsd-debugger`, and `gsd-phase-researcher` now call context-slice before reading in-scope files when the capability is enabled. Each agent uses domain-specific pattern groups. Coverage gaps are disclosed in output artifacts.
+- **Symbol-aware fuzzy seed matching for graphify** — `tokenizeQuery`, `splitSymbolTokens`, `buildNodeSearchTokens`, and `matchFuzzySeeds` added to the graphify engine. `SEED_STOPWORDS` and `SEED_SYNONYMS` are frozen constants; input is capped at 2 000 chars.
+- **Two-tier `seedAndExpand`** — `findSubstringSeeds` handles tier-1 exact substring matching; `matchFuzzySeeds` fires as a fallback only when tier-1 returns nothing.
+
+### Inherited from gsd-core 1.3.1
+
+Full phase-loop workflow (discuss → plan → execute → verify → ship), all commands, installer, runtime support (Claude Code, Gemini CLI, Codex, Cursor, Windsurf, and more).
 
 ### Added
 
